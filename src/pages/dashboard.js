@@ -1,21 +1,31 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/router";
 
 import {
   getProjects,
   createProject,
-  softDeleteProject,
-  formatCurrency,
-  formatDate
+  softDeleteProject
 } from "../lib/storage";
 
 export default function Dashboard() {
-  const [projects, setProjects] = useState([]);
+
+  const router = useRouter();
+
+  // 🔐 Check if user exists
+  useEffect(() => {
+    const user = localStorage.getItem("user");
+
+    if (!user) {
+      router.push("/login");
+    }
+  }, []);
+
+    const [projects, setProjects] = useState([]);
 
   function load() {
-    const list = getProjects().sort(
-      (a, b) => (b.lastActivity || 0) - (a.lastActivity || 0)
-    );
+    const list = getProjects()
+      .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
     setProjects(list);
   }
 
@@ -23,8 +33,8 @@ export default function Dashboard() {
     load();
   }, []);
 
-  function handleAdd() {
-    const name = prompt("Project name?");
+  function handleAddProject() {
+    const name = prompt("Project Name?");
     if (!name) return;
 
     createProject(name);
@@ -38,11 +48,9 @@ export default function Dashboard() {
   }
 
   const totalBalance = projects.reduce((s, p) => s + p.balance, 0);
-  const lastUpdated =
-    projects.length > 0 ? formatDate(projects[0].lastActivity) : "-";
 
   return (
-    <div style={{ maxWidth: 700, margin: "40px auto" }}>
+    <div style={{ maxWidth: 700, margin: "40px auto", fontFamily: "sans-serif" }}>
       <h2>Dashboard</h2>
 
       <div style={{
@@ -54,7 +62,7 @@ export default function Dashboard() {
       }}>
         <div>
           <div>Total Projects Balance</div>
-          <h2>{formatCurrency(totalBalance)}</h2>
+          <h2>{totalBalance.toLocaleString()}</h2>
         </div>
 
         <div style={{ textAlign: "right" }}>
@@ -63,19 +71,16 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div style={{ marginTop: 10, fontSize: 13, color: "#666" }}>
-        Last Updated: {lastUpdated}
-      </div>
-
       <button
-        onClick={handleAdd}
+        onClick={handleAddProject}
         style={{
           width: "100%",
           marginTop: 20,
-          padding: 14,
+          padding: 15,
           background: "black",
           color: "white",
-          borderRadius: 10
+          borderRadius: 10,
+          border: "none"
         }}
       >
         + Add Project
@@ -84,31 +89,27 @@ export default function Dashboard() {
       <h3 style={{ marginTop: 30 }}>Your Projects</h3>
 
       {projects.map(p => (
-        <div
-          key={p.id}
-          style={{
-            border: "1px solid #eee",
-            padding: 15,
-            borderRadius: 10,
-            marginTop: 10,
-            display: "flex",
-            justifyContent: "space-between"
-          }}
-        >
-          <div>
-            <Link href={`/project/${p.id}`}>
-              <b style={{ cursor: "pointer" }}>{p.name}</b>
-            </Link>
-
-            <div style={{ fontSize: 12, color: "#777" }}>
-              Last Activity: {formatDate(p.lastActivity)}
+        <div key={p.id} style={{
+          border: "1px solid #eee",
+          padding: 15,
+          borderRadius: 12,
+          marginTop: 10,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center"
+        }}>
+          <Link href={`/project/${p.id}`}>
+            <div style={{ cursor: "pointer" }}>
+              <b>{p.name}</b>
+              <div style={{ fontSize: 12, opacity: 0.6 }}>
+                Last Activity: {new Date(p.updatedAt).toLocaleString()}
+              </div>
             </div>
-          </div>
+          </Link>
 
-          <div style={{ display: "flex", gap: 15 }}>
-            <div>{formatCurrency(p.balance)}</div>
-
-            <button onClick={() => handleDelete(p.id)}>🗑</button>
+          <div style={{ display: "flex", gap: 20 }}>
+            <b>{p.balance.toLocaleString()}</b>
+            <span style={{ cursor: "pointer" }} onClick={() => handleDelete(p.id)}>🗑</span>
           </div>
         </div>
       ))}

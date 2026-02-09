@@ -1,85 +1,91 @@
+import { useState } from "react";
 import { useRouter } from "next/router";
 
 export default function Signup() {
   const router = useRouter();
 
-const inputStyle = {
-  width: "100%",
-  maxWidth: "420px",
-  padding: "10px",
-  marginBottom: "12px",
-  border: "1px solid #ccc",
-  borderRadius: "6px",
-};
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
-const primaryButton = {
-  width: "100%",
-  maxWidth: "420px",
-  padding: "12px",
-  background: "#000",
-  color: "#fff",
-  border: "none",
-  borderRadius: "6px",
-  cursor: "pointer",
-};
+  function handleSubmit(e) {
+  e.preventDefault();
+
+  if (!fullName || !email || !password || !confirmPassword) {
+    alert("Fill all fields");
+    return;
+  }
+
+  if (password !== confirmPassword) {
+    alert("Passwords not matching");
+    return;
+  }
+
+  localStorage.setItem(
+    "user",
+    JSON.stringify({
+      fullName,
+      email,
+      password,
+    })
+  );
+
+  router.push("/dashboard");
+}
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        fontFamily: "system-ui, -apple-system, sans-serif",
-      }}
-    >
-      <h1 style={{ fontSize: "28px", marginBottom: "16px" }}>
-        Create Account
-      </h1>
+    <div style={container}>
+      <h2>Create Account</h2>
 
-<input
-  type="text"
-  placeholder="Full Name"
-  style={inputStyle}
-/>
+      <form onSubmit={handleSubmit}>
+        <input
+          type="text"
+          placeholder="Full Name"
+          style={inputStyle}
+          value={fullName}
+          onChange={(e) => setFullName(e.target.value)}
+        />
 
-      <input
-        type="email"
-        placeholder="Email"
-        style={inputStyle}
-      />
+        <input
+          type="email"
+          placeholder="Email"
+          style={inputStyle}
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
 
-      <input
-        type="password"
-        placeholder="Password"
-        style={inputStyle}
-      />
+        <input
+          type="password"
+          placeholder="Password"
+          style={inputStyle}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
 
-      <input
-        type="password"
-        placeholder="Confirm Password"
-        style={inputStyle}
-      />
+        <input
+          type="password"
+          placeholder="Confirm Password"
+          style={inputStyle}
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+        />
 
-      <button
-  type="button"
-  style={primaryButton}
-  onClick={() => router.push("/dashboard")}
->
-  Create Account
-</button>
-
-      <p style={{ marginTop: "16px", fontSize: "14px" }}>
-        Already have an account?{" "}
-        <a href="/login" style={{ color: "#000", fontWeight: "600" }}>
-          Login
-        </a>
-      </p>
+        <button type="submit" style={buttonStyle}>
+          Create Account
+        </button>
+      </form>
     </div>
   );
 }
 
+const container = {
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  marginTop: "100px",
+};
+
 const inputStyle = {
   width: "280px",
   padding: "10px",
@@ -88,11 +94,11 @@ const inputStyle = {
   borderRadius: "6px",
 };
 
-const primaryButton = {
-  width: "280px",
-  padding: "10px",
-  background: "#000",
-  color: "#fff",
+const buttonStyle = {
+  width: "300px",
+  padding: "12px",
+  background: "black",
+  color: "white",
   border: "none",
   borderRadius: "6px",
   cursor: "pointer",
