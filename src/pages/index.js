@@ -1,4 +1,8 @@
+import { useRouter } from "next/router";
+
 export default function Home() {
+  const router = useRouter();
+
   return (
     <div
       style={{
@@ -20,7 +24,7 @@ export default function Home() {
 
       <div style={{ display: "flex", gap: "12px" }}>
         <button
-        onClick={() => (window.location.href = "/signup")}
+        onClick={() => router.push("/signup")}
           style={{
             padding: "10px 18px",
             background: "#000",
@@ -34,7 +38,7 @@ export default function Home() {
         </button>
 
         <button
-        onClick={() => (window.location.href = "/login")}
+        onClick={() => router.push("/login")}
           style={{
             padding: "10px 18px",
             background: "#fff",

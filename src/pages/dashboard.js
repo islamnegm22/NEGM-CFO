@@ -5,114 +5,205 @@ import { useRouter } from "next/router";
 import {
   getProjects,
   createProject,
-  softDeleteProject
+  getProjectBalance
 } from "../lib/storage";
 
 export default function Dashboard() {
-
   const router = useRouter();
+  const [projects, setProjects] = useState([]);
 
-  // 🔐 Check if user exists
   useEffect(() => {
     const user = localStorage.getItem("user");
-
     if (!user) {
-      router.push("/login");
+      router.replace("/login");
+      return;
     }
+
+    loadProjects();
   }, []);
 
-    const [projects, setProjects] = useState([]);
+  function loadProjects() {
+    const list = getProjects() || [];
 
-  function load() {
-    const list = getProjects()
-      .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+    list.sort(
+      (a, b) =>
+        new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0)
+    );
+
     setProjects(list);
   }
 
-  useEffect(() => {
-    load();
-  }, []);
-
-  function handleAddProject() {
-    const name = prompt("Project Name?");
+  function handleCreate() {
+    const name = prompt("Project name?");
     if (!name) return;
 
     createProject(name);
-    load();
+    loadProjects();
   }
 
-  function handleDelete(id) {
-    if (!confirm("Move project to Trash?")) return;
-    softDeleteProject(id);
-    load();
-  }
-
-  const totalBalance = projects.reduce((s, p) => s + p.balance, 0);
+  const totalBalance = projects.reduce(
+    (sum, p) => sum + getProjectBalance(p.id),
+    0
+  );
 
   return (
-    <div style={{ maxWidth: 700, margin: "40px auto", fontFamily: "sans-serif" }}>
-      <h2>Dashboard</h2>
+    <div style={{ maxWidth: 750, margin: "50px auto" }}>
+      <h2 style={{ marginBottom: 25 }}>Dashboard</h2>
 
-      <div style={{
-        border: "1px solid #eee",
-        padding: 20,
-        borderRadius: 12,
-        display: "flex",
-        justifyContent: "space-between"
-      }}>
+      {/* 🔥 Bigger Professional Card */}
+      <div
+        style={{
+          border: "1px solid #eee",
+          padding: 30,
+          borderRadius: 16,
+          marginBottom: 30,
+          background: "#fafafa",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center"
+        }}
+      >
         <div>
-          <div>Total Projects Balance</div>
-          <h2>{totalBalance.toLocaleString()}</h2>
+          <div
+            style={{
+              fontSize: 13,
+              letterSpacing: 1,
+              opacity: 0.6,
+              marginBottom: 8
+            }}
+          >
+            TOTAL PROJECTS BALANCE
+          </div>
+
+          <div
+            style={{
+              fontSize: 34,
+              fontWeight: "700",
+              color: totalBalance >= 0 ? "#2e7d32" : "#d32f2f"
+            }}
+          >
+            {totalBalance >= 0 ? "+" : ""}
+            {totalBalance.toLocaleString()}
+          </div>
         </div>
 
         <div style={{ textAlign: "right" }}>
-          <div>Total Projects</div>
-          <h2>{projects.length}</h2>
+          <div
+            style={{
+              fontSize: 13,
+              letterSpacing: 1,
+              opacity: 0.6,
+              marginBottom: 8
+            }}
+          >
+            TOTAL PROJECTS
+          </div>
+
+          <div
+            style={{
+              fontSize: 28,
+              fontWeight: "600"
+            }}
+          >
+            {projects.length}
+          </div>
         </div>
       </div>
 
       <button
-        onClick={handleAddProject}
+        onClick={handleCreate}
         style={{
           width: "100%",
-          marginTop: 20,
           padding: 15,
           background: "black",
           color: "white",
           borderRadius: 10,
-          border: "none"
+          marginBottom: 35
         }}
       >
         + Add Project
       </button>
 
-      <h3 style={{ marginTop: 30 }}>Your Projects</h3>
+      {projects.map(p => {
+        const balance = getProjectBalance(p.id);
 
-      {projects.map(p => (
-        <div key={p.id} style={{
-          border: "1px solid #eee",
-          padding: 15,
-          borderRadius: 12,
-          marginTop: 10,
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center"
-        }}>
-          <Link href={`/project/${p.id}`}>
-            <div style={{ cursor: "pointer" }}>
-              <b>{p.name}</b>
-              <div style={{ fontSize: 12, opacity: 0.6 }}>
-                Last Activity: {new Date(p.updatedAt).toLocaleString()}
+        return (
+          <div
+            key={p.id}
+            style={{
+              position: "relative",
+              border: "1px solid #eee",
+              padding: 20,
+              borderRadius: 16,
+              marginBottom: 20,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              transition: "all 0.15s ease",
+              background: "#fff",
+              overflow: "hidden"
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.boxShadow =
+                "0 6px 18px rgba(0,0,0,0.06)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.boxShadow = "none";
+            }}
+          >
+            {/* Page Fold Effect */}
+            <div
+              style={{
+                position: "absolute",
+                bottom: 0,
+                right: 0,
+                width: 0,
+                height: 0,
+                borderLeft: "18px solid transparent",
+                borderTop: "18px solid #f5f5f5"
+              }}
+            />
+
+            <Link href={`/project/${p.id}`}>
+              <div style={{ cursor: "pointer" }}>
+                <div
+                  style={{
+                    fontSize: 18,
+                    fontWeight: 600,
+                    marginBottom: 6
+                  }}
+                >
+                  {p.name}
+                </div>
+
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "#777"
+                  }}
+                >
+                  {p.updatedAt
+                    ? `Updated ${new Date(p.updatedAt).toLocaleString()}`
+                    : "No activity yet"}
+                </div>
               </div>
-            </div>
-          </Link>
+            </Link>
 
-          <div style={{ display: "flex", gap: 20 }}>
-            <b>{p.balance.toLocaleString()}</b>
-            <span style={{ cursor: "pointer" }} onClick={() => handleDelete(p.id)}>🗑</span>
+            <div
+              style={{
+                color: balance >= 0 ? "#2e7d32" : "#d32f2f",
+                fontWeight: 700,
+                fontSize: 18,
+                minWidth: 120,
+                textAlign: "right"
+              }}
+            >
+              {balance >= 0 ? "+" : ""}
+              {balance.toLocaleString()}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

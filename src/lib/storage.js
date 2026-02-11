@@ -1,183 +1,113 @@
-// src/lib/storage.js
+const PROJECTS_KEY = "negm_projects";
 
-const STORAGE_KEY = "negm_projects";
-const TRASH_KEY = "negm_trash";
-
-// ---------------- LOAD / SAVE ----------------
-
-function load() {
-  if (typeof window === "undefined") return [];
-  return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-}
-
-function save(data) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-}
-
-function loadTrash() {
-  if (typeof window === "undefined") return [];
-  return JSON.parse(localStorage.getItem(TRASH_KEY) || "[]");
-}
-
-function saveTrash(data) {
-  localStorage.setItem(TRASH_KEY, JSON.stringify(data));
-}
-
-// ---------------- HELPERS ----------------
-
-function recalcBalance(project) {
-  return project.transactions.reduce(
-    (sum, t) => sum + Number(t.amount),
-    0
-  );
-}
-
-export function formatCurrency(num) {
-  return Number(num || 0).toLocaleString();
-}
-
-export function formatDate(ts) {
-  if (!ts) return "";
-  return new Date(ts).toLocaleString();
-}
-
-// ---------------- PROJECT CRUD ----------------
+/* ========= PROJECTS ========= */
 
 export function getProjects() {
-  return load().sort((a, b) => (b.lastActivity || 0) - (a.lastActivity || 0));
+  return JSON.parse(localStorage.getItem(PROJECTS_KEY) || "[]");
 }
 
 export function getProjectById(id) {
-  return load().find(p => String(p.id) === String(id));
+  const projects = getProjects();
+  return projects.find(p => p.id === Number(id));
+}
+
+export function saveProjects(list) {
+  localStorage.setItem(PROJECTS_KEY, JSON.stringify(list));
 }
 
 export function createProject(name) {
-  const data = load();
+  const list = getProjects();
 
   const newProject = {
-    id: Date.now().toString(),
-    name: name || `Project ${Date.now()}`,
-    balance: 0,
-    transactions: [],
-    lastActivity: Date.now(),
+    id: Date.now(),
+    name,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
   };
 
-  data.unshift(newProject);
-  save(data);
-
+  list.push(newProject);
+  saveProjects(list);
   return newProject;
 }
 
-export function renameProject(id, newName) {
-  const data = load();
-  const project = data.find(p => p.id === id);
-  if (!project) return;
+export function touchProject(projectId) {
+  const projects = getProjects();
 
-  project.name = newName;
-  project.lastActivity = Date.now();
+  const updated = projects.map(p =>
+    p.id === Number(projectId)
+      ? { ...p, updatedAt: new Date().toISOString() }
+      : p
+  );
 
-  save(data);
+  saveProjects(updated);
 }
 
-export function softDeleteProject(id) {
-  const data = load();
-  const trash = loadTrash();
+/* ========= TRANSACTIONS ========= */
 
-  const project = data.find(p => p.id === id);
-  if (!project) return;
-
-  saveTrash([project, ...trash]);
-  save(data.filter(p => p.id !== id));
+function txKey(id) {
+  return `project-transactions-${id}`;
 }
 
-// ---------------- TRANSACTIONS ----------------
+export function getProjectTransactions(projectId) {
+  return JSON.parse(localStorage.getItem(txKey(projectId)) || "[]");
+}
+
+export function saveProjectTransactions(projectId, list) {
+  localStorage.setItem(txKey(projectId), JSON.stringify(list));
+  touchProject(projectId);
+}
 
 export function addTransaction(projectId, tx) {
-  const data = load();
-  const project = data.find(p => p.id === projectId);
-  if (!project) return;
-
-  if (!project.transactions) project.transactions = [];
+  const list = getProjectTransactions(projectId);
 
   const newTx = {
-    id: Date.now().toString(),
-    amount: Number(tx.amount),
-    with: tx.with || "",
-    note: tx.note || "",
-    time: Date.now(),
+    id: Date.now(),
+    ...tx,
+    createdAt: new Date().toISOString()
   };
 
-  project.transactions.unshift(newTx);
+  list.unshift(newTx);
 
-  project.balance = recalcBalance(project);
-  project.lastActivity = Date.now();
+  saveProjectTransactions(projectId, list);
+}
 
-  save(data);
+export function updateTransaction(projectId, updatedTx) {
+  const list = getProjectTransactions(projectId);
+
+  const updated = list.map(t =>
+    t.id === updatedTx.id ? updatedTx : t
+  );
+
+  saveProjectTransactions(projectId, updated);
 }
 
 export function deleteTransaction(projectId, txId) {
-  const data = load();
-  const project = data.find(p => p.id === projectId);
-  if (!project) return;
+  const list = getProjectTransactions(projectId);
 
-  project.transactions = project.transactions.filter(t => t.id !== txId);
+  const filtered = list.filter(t => t.id !== txId);
 
-  project.balance = recalcBalance(project);
-  project.lastActivity = Date.now();
-
-  save(data);
+  saveProjectTransactions(projectId, filtered);
 }
 
-export function editTransaction(projectId, txId, newData) {
-  const data = load();
-  const project = data.find(p => p.id === projectId);
-  if (!project) return;
+export function getProjectBalance(projectId) {
+  const tx = getProjectTransactions(projectId);
 
-  const tx = project.transactions.find(t => t.id === txId);
-  if (!tx) return;
-
-  tx.amount = Number(newData.amount);
-  tx.with = newData.with;
-  tx.note = newData.note;
-  tx.time = Date.now();
-
-  project.balance = recalcBalance(project);
-  project.lastActivity = Date.now();
-
-  save(data);
+  return tx.reduce((sum, t) => {
+    return sum + Number(t.amount || 0);
+  }, 0);
 }
 
-// ---------------- DASHBOARD HELPERS ----------------
+/* ========= DELETE PROJECT ========= */
 
-export function getTotalBalance() {
-  return load().reduce((sum, p) => sum + Number(p.balance || 0), 0);
-}
+export function deleteProject(projectId) {
+  const projects = getProjects();
 
-export function getLastUpdatedTime() {
-  const projects = load();
-  if (!projects.length) return null;
+  const filtered = projects.filter(
+    p => p.id !== Number(projectId)
+  );
 
-  return Math.max(...projects.map(p => p.lastActivity || 0));
-}
+  saveProjects(filtered);
 
-// ---------------- TRASH ----------------
-
-export function getTrash() {
-  return loadTrash();
-}
-
-export function restoreProject(id) {
-  const trash = loadTrash();
-  const data = load();
-
-  const project = trash.find(p => p.id === id);
-  if (!project) return;
-
-  save([project, ...data]);
-  saveTrash(trash.filter(p => p.id !== id));
-}
-
-export function deleteProjectForever(id) {
-  const trash = loadTrash();
-  saveTrash(trash.filter(p => p.id !== id));
+  // remove its transactions
+  localStorage.removeItem(`project-transactions-${projectId}`);
 }

@@ -14,10 +14,6 @@ export default function Navbar() {
           Dashboard
         </button>
 
-        <button style={linkBtn} onClick={() => router.push("/project/1")}>
-          Projects
-        </button>
-
         <button style={logoutBtn} onClick={() => router.push("/login")}>
           Logout
         </button>
@@ -26,43 +22,39 @@ export default function Navbar() {
   );
 }
 
-/* ===== Styles ===== */
-
 const nav = {
-  position: "sticky",
-  top: 0,
-  zIndex: 100,
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
-  padding: "16px 40px",
+  padding: "12px 24px",
   borderBottom: "1px solid #eee",
-  background: "white",
+  background: "#fff",
 };
 
 const logo = {
-  fontWeight: "700",
+  fontWeight: "600",
   fontSize: "18px",
   cursor: "pointer",
 };
 
 const links = {
   display: "flex",
-  gap: "16px",
+  gap: "12px",
 };
 
 const linkBtn = {
-  background: "transparent",
-  border: "none",
+  padding: "8px 14px",
+  border: "1px solid #ddd",
+  borderRadius: "8px",
+  background: "#fff",
   cursor: "pointer",
-  fontSize: "14px",
 };
 
 const logoutBtn = {
-  background: "#000",
-  color: "#fff",
-  border: "none",
-  padding: "6px 12px",
-  borderRadius: "6px",
+  padding: "8px 14px",
+  border: "1px solid #ff4d4f",
+  borderRadius: "8px",
+  background: "#fff",
+  color: "#ff4d4f",
   cursor: "pointer",
 };
