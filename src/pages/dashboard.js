@@ -1,48 +1,72 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
-
-import {
-  getProjects,
-  createProject,
-  getProjectBalance
-} from "../lib/storage";
+import { supabase } from "../lib/supabaseClient";
 
 export default function Dashboard() {
   const router = useRouter();
   const [projects, setProjects] = useState([]);
 
   useEffect(() => {
-    const user = localStorage.getItem("user");
-    if (!user) {
-      router.replace("/login");
-      return;
-    }
+    const checkUser = async () => {
+      const { data } = await supabase.auth.getSession();
 
-    loadProjects();
+      if (!data.session) {
+        router.replace("/login");
+        return;
+      }
+
+      loadProjects();
+    };
+
+    checkUser();
   }, []);
 
-  function loadProjects() {
-    const list = getProjects() || [];
+  async function loadProjects() {
+    const { data, error } = await supabase
+      .from("projects")
+      .select(`
+        id,
+        name,
+        updated_at,
+        transactions ( amount )
+      `)
+      .order("updated_at", { ascending: false });
 
-    list.sort(
-      (a, b) =>
-        new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0)
-    );
+    if (!error && data) {
+      const formatted = data.map(p => {
+        const balance = p.transactions.reduce(
+          (sum, t) => sum + Number(t.amount),
+          0
+        );
 
-    setProjects(list);
+        return { ...p, balance };
+      });
+
+      setProjects(formatted);
+    }
   }
 
-  function handleCreate() {
+  async function handleCreate() {
     const name = prompt("Project name?");
     if (!name) return;
 
-    createProject(name);
-    loadProjects();
+    const {
+      data: { user }
+    } = await supabase.auth.getUser();
+
+    const { error } = await supabase.from("projects").insert([
+      {
+        name,
+        user_id: user.id
+      }
+    ]);
+
+    if (!error) loadProjects();
   }
 
   const totalBalance = projects.reduce(
-    (sum, p) => sum + getProjectBalance(p.id),
+    (sum, p) => sum + (p.balance || 0),
     0
   );
 
@@ -50,7 +74,6 @@ export default function Dashboard() {
     <div style={{ maxWidth: 750, margin: "50px auto" }}>
       <h2 style={{ marginBottom: 25 }}>Dashboard</h2>
 
-      {/* 🔥 Bigger Professional Card */}
       <div
         style={{
           border: "1px solid #eee",
@@ -125,7 +148,7 @@ export default function Dashboard() {
       </button>
 
       {projects.map(p => {
-        const balance = getProjectBalance(p.id);
+        const balance = p.balance || 0;
 
         return (
           <div
@@ -139,31 +162,9 @@ export default function Dashboard() {
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
-              transition: "all 0.15s ease",
-              background: "#fff",
-              overflow: "hidden"
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.boxShadow =
-                "0 6px 18px rgba(0,0,0,0.06)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.boxShadow = "none";
+              background: "#fff"
             }}
           >
-            {/* Page Fold Effect */}
-            <div
-              style={{
-                position: "absolute",
-                bottom: 0,
-                right: 0,
-                width: 0,
-                height: 0,
-                borderLeft: "18px solid transparent",
-                borderTop: "18px solid #f5f5f5"
-              }}
-            />
-
             <Link href={`/project/${p.id}`}>
               <div style={{ cursor: "pointer" }}>
                 <div
@@ -182,8 +183,8 @@ export default function Dashboard() {
                     color: "#777"
                   }}
                 >
-                  {p.updatedAt
-                    ? `Updated ${new Date(p.updatedAt).toLocaleString()}`
+                  {p.updated_at
+                    ? `Updated ${new Date(p.updated_at).toLocaleString()}`
                     : "No activity yet"}
                 </div>
               </div>

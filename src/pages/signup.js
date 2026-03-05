@@ -1,3 +1,4 @@
+import { supabase } from "../lib/supabaseClient";
 import { useState } from "react";
 import { useRouter } from "next/router";
 
@@ -8,8 +9,10 @@ export default function Signup() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCheckEmail, setShowCheckEmail] = useState(false);
+  const [loading, setLoading] = useState(false); // ✅ NEW
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
 
     if (!fullName || !email || !password || !confirmPassword) {
@@ -22,59 +25,79 @@ export default function Signup() {
       return;
     }
 
-    localStorage.setItem(
-      "user",
-      JSON.stringify({
-        fullName,
-        email,
-        password,
-      })
-    );
+    setLoading(true); // ✅ NEW
 
-    router.push("/dashboard");
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: fullName,
+        },
+      },
+    });
+
+    setLoading(false); // ✅ NEW
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    setShowCheckEmail(true);
   }
 
   return (
     <div style={container}>
       <h2>Create Account</h2>
 
-      <form onSubmit={handleSubmit} style={formStyle}>
-        <input
-          type="text"
-          placeholder="Full Name"
-          style={inputStyle}
-          value={fullName}
-          onChange={(e) => setFullName(e.target.value)}
-        />
+      {!showCheckEmail ? (
+        <form onSubmit={handleSubmit} style={formStyle}>
+          <input
+            type="text"
+            placeholder="Full Name"
+            style={inputStyle}
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+          />
 
-        <input
-          type="email"
-          placeholder="Email"
-          style={inputStyle}
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
+          <input
+            type="email"
+            placeholder="Email"
+            style={inputStyle}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
 
-        <input
-          type="password"
-          placeholder="Password"
-          style={inputStyle}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
+          <input
+            type="password"
+            placeholder="Password"
+            style={inputStyle}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
 
-        <input
-          type="password"
-          placeholder="Confirm Password"
-          style={inputStyle}
-          value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
-        />
+          <input
+            type="password"
+            placeholder="Confirm Password"
+            style={inputStyle}
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+          />
 
-        <button type="submit" style={buttonStyle}>
-          Create Account
-        </button>
-      </form>
+          <button
+            type="submit"
+            style={buttonStyle}
+            disabled={loading}
+          >
+            {loading ? "Creating account..." : "Create Account"}
+          </button>
+        </form>
+      ) : (
+        <p style={{ marginTop: 20, fontWeight: "600", textAlign: "center" }}>
+          📩 Check your inbox and confirm your email to continue.
+        </p>
+      )}
 
       <p style={{ marginTop: 15 }}>
         Already have account?{" "}

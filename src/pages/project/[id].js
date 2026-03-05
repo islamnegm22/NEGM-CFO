@@ -1,15 +1,7 @@
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-
-import {
-  getProjectTransactions,
-  addTransaction,
-  updateTransaction,
-  deleteTransaction,
-  getProjectById,
-  deleteProject
-} from "../../lib/storage";
+import { supabase } from "../../lib/supabaseClient";
 
 export default function ProjectPage() {
   const router = useRouter();
@@ -20,30 +12,52 @@ export default function ProjectPage() {
   const [hoveringName, setHoveringName] = useState(false);
 
   const [amount, setAmount] = useState("");
-  const [type, setType] = useState("income"); // ✅ NEW
+  const [type, setType] = useState("");
+  const [typeError, setTypeError] = useState(false);
   const [withWho, setWithWho] = useState("");
   const [note, setNote] = useState("");
   const [editingId, setEditingId] = useState(null);
 
   useEffect(() => {
-    if (!id) return;
+  if (!id) return;
+  loadProject();
+  loadTransactions();
+}, [id]);
 
-    setTransactions(getProjectTransactions(id));
+  async function loadProject() {
+    const { data } = await supabase
+      .from("projects")
+      .select("name")
+      .eq("id", id)
+      .single();
 
-    const found = getProjectById(id);
-    if (found) {
-      setProjectName(found.name);
-    }
+    if (data) setProjectName(data.name);
+  }
 
-  }, [id]);
+  async function loadTransactions() {
+    const { data, error } = await supabase
+      .from("transactions")
+      .select("*")
+      .eq("project_id", Number(id))
+      .order("updated_at", { ascending: false });
 
-  function handleSubmit() {
+    if (!error && data) setTransactions(data);
+  }
+
+  async function handleSubmit() {
     const trimmedAmount = amount.toString().trim();
     const trimmedWith = withWho.trim();
     const trimmedNote = note.trim();
 
     if (!trimmedAmount || isNaN(trimmedAmount)) return;
     if (!trimmedWith) return;
+
+    if (!type) {
+      setTypeError(true);
+      return;
+    }
+
+    setTypeError(false);
 
     const numericAmount = Number(trimmedAmount);
 
@@ -53,76 +67,88 @@ export default function ProjectPage() {
         : Math.abs(numericAmount);
 
     if (editingId) {
-      updateTransaction(id, {
-        id: editingId,
-        amount: finalAmount,
-        withWho: trimmedWith,
-        note: trimmedNote,
-        createdAt: new Date().toISOString()
-      });
-      setEditingId(null);
-    } else {
-      addTransaction(id, {
-        amount: finalAmount,
-        withWho: trimmedWith,
-        note: trimmedNote
-      });
-    }
+  await supabase
+    .from("transactions")
+    .update({
+      amount: finalAmount,
+      with_who: trimmedWith,
+      note: trimmedNote
+    })
+    .eq("id", editingId);
 
-    setTransactions(getProjectTransactions(id));
+  await supabase
+    .from("projects")
+    .update({ updated_at: new Date() })
+    .eq("id", id);
+
+  setEditingId(null);
+} else {
+  await supabase.from("transactions").insert([
+    {
+      project_id: id,
+      amount: finalAmount,
+      with_who: trimmedWith,
+      note: trimmedNote
+    }
+  ]);
+
+  await supabase
+    .from("projects")
+    .update({ updated_at: new Date() })
+    .eq("id", id);
+}
+
     setAmount("");
     setWithWho("");
     setNote("");
-    setType("income");
+    setType("");
+
+    loadTransactions();
   }
 
   function startEdit(tx) {
-    setEditingId(tx.id);
-    setAmount(Math.abs(tx.amount));
-    setType(tx.amount < 0 ? "expense" : "income");
-    setWithWho(tx.withWho);
-    setNote(tx.note || "");
+  setEditingId(tx.id);
+  setAmount(Math.abs(tx.amount));
+  setType(tx.amount < 0 ? "expense" : "income");
+  setWithWho(tx.with_who);
+  setNote(tx.note || "");
+  setTypeError(false);
+}
+
+async function handleDelete(txId) {
+  const confirmDelete = confirm("Delete transaction?");
+  if (!confirmDelete) return;
+
+  await supabase.from("transactions").delete().eq("id", txId);
+
+  await supabase
+    .from("projects")
+    .update({ updated_at: new Date() })
+    .eq("id", id);
+
+  loadTransactions();
+}
+
+  async function handleRename() {
+    const newName = prompt("Edit project name:", projectName);
+    if (!newName) return;
+
+    await supabase
+  .from("projects")
+  .update({
+    name: newName,
+    updated_at: new Date()
+  })
+  .eq("id", id);
+
+setProjectName(newName);
   }
 
-  function handleDelete(txId) {
-    const confirmDelete = confirm("Are you sure you want to delete this transaction?");
+  async function handleDeleteProject() {
+    const confirmDelete = confirm("Delete this project?");
     if (!confirmDelete) return;
 
-    deleteTransaction(id, txId);
-    setTransactions(getProjectTransactions(id));
-  }
-
-  function handleRename() {
-    const currentName = getProjectById(id)?.name || "";
-    const newName = prompt("Edit project name:", currentName);
-
-    if (newName === null) return;
-
-    const trimmedName = newName.trim();
-    if (!trimmedName || trimmedName === currentName) return;
-
-    const projects = JSON.parse(
-      localStorage.getItem("negm_projects") || "[]"
-    );
-
-    const updated = projects.map(p =>
-      p.id === Number(id)
-        ? { ...p, name: trimmedName }
-        : p
-    );
-
-    localStorage.setItem("negm_projects", JSON.stringify(updated));
-    setProjectName(trimmedName);
-  }
-
-  function handleDeleteProject() {
-    const confirmDelete = confirm(
-      "This will permanently delete the entire project and all its transactions.\n\nAre you sure?"
-    );
-
-    if (!confirmDelete) return;
-
-    deleteProject(id);
+    await supabase.from("projects").delete().eq("id", id);
     router.push("/dashboard");
   }
 
@@ -130,6 +156,14 @@ export default function ProjectPage() {
     (sum, t) => sum + Number(t.amount || 0),
     0
   );
+
+  const totalIncome = transactions
+    .filter(t => t.amount > 0)
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const totalExpense = transactions
+    .filter(t => t.amount < 0)
+    .reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
   return (
     <div style={{ maxWidth: 600, margin: "40px auto", padding: 20 }}>
@@ -147,18 +181,17 @@ export default function ProjectPage() {
           marginBottom: 8,
           fontSize: 25,
           fontWeight: 600,
-          textDecoration: hoveringName ? "underline" : "none",
-          transition: "all 0.15s ease"
+          textDecoration: hoveringName ? "underline" : "none"
         }}
       >
-        {projectName || `Project ${id}`}
+        {projectName}
       </h2>
 
+      {/* BALANCE */}
       <div style={{ marginTop: 20, marginBottom: 20 }}>
         <div style={{ fontSize: 12, color: "#888", letterSpacing: 1 }}>
           CURRENT BALANCE
         </div>
-
         <div
           style={{
             fontSize: 32,
@@ -172,15 +205,72 @@ export default function ProjectPage() {
         </div>
       </div>
 
-      {/* ✅ Income / Expense Selector */}
-      <select
-        value={type}
-        onChange={(e) => setType(e.target.value)}
-        style={{ width: "100%", padding: 10, marginTop: 10 }}
+      {/* SUMMARY */}
+      <div
+        style={{
+          border: "1px solid #eee",
+          borderRadius: 12,
+          padding: 15,
+          marginBottom: 20,
+          background: "#fafafa",
+          display: "flex",
+          justifyContent: "space-between"
+        }}
       >
-        <option value="income">Income</option>
-        <option value="expense">Expense</option>
-      </select>
+        <div>
+          <div style={{ fontSize: 11, opacity: 0.6 }}>TOTAL INCOME</div>
+          <div style={{ color: "#16a34a", fontWeight: 600 }}>
+            +{totalIncome.toLocaleString()}
+          </div>
+        </div>
+
+        <div>
+          <div style={{ fontSize: 11, opacity: 0.6 }}>TOTAL EXPENSE</div>
+          <div style={{ color: "#dc2626", fontWeight: 600 }}>
+            -{totalExpense.toLocaleString()}
+          </div>
+        </div>
+      </div>
+
+      {/* TYPE SELECTOR */}
+      <div
+        style={{
+          display: "flex",
+          marginTop: 10,
+          borderRadius: 999,
+          overflow: "hidden",
+          border: typeError ? "1px solid #dc2626" : "1px solid #ddd",
+          background: "#f5f5f5"
+        }}
+      >
+        <button
+          onClick={() => { setType("income"); setTypeError(false); }}
+          style={{
+            flex: 1,
+            padding: 12,
+            border: "none",
+            background: type === "income" ? "#16a34a" : "transparent",
+            color: type === "income" ? "#fff" : "#333",
+            fontWeight: 600
+          }}
+        >
+          💰 Income
+        </button>
+
+        <button
+          onClick={() => { setType("expense"); setTypeError(false); }}
+          style={{
+            flex: 1,
+            padding: 12,
+            border: "none",
+            background: type === "expense" ? "#dc2626" : "transparent",
+            color: type === "expense" ? "#fff" : "#333",
+            fontWeight: 600
+          }}
+        >
+          🧾 Expense
+        </button>
+      </div>
 
       <input
         placeholder="Amount"
@@ -205,11 +295,12 @@ export default function ProjectPage() {
 
       <button
         onClick={handleSubmit}
+        disabled={!type}
         style={{
           width: "100%",
           padding: 12,
           marginTop: 10,
-          background: editingId ? "#444" : "black",
+          background: "black",
           color: "white",
           border: "none",
           borderRadius: 8
@@ -218,7 +309,8 @@ export default function ProjectPage() {
         {editingId ? "Update Transaction" : "Add Transaction"}
       </button>
 
-      <div style={{ marginTop: 20 }}>
+      {/* TRANSACTIONS */}
+      <div style={{ marginTop: 30 }}>
         {transactions.map((t) => (
           <div
             key={t.id}
@@ -232,43 +324,35 @@ export default function ProjectPage() {
             }}
           >
             <div>
-              <div style={{ fontWeight: "bold" }}>
+              <div
+                style={{
+                  fontWeight: "bold",
+                  color: t.amount > 0 ? "#16a34a" : "#dc2626"
+                }}
+              >
                 {t.amount > 0 ? "+" : ""}
                 {Number(t.amount).toLocaleString()}
               </div>
-              <div>{t.withWho}</div>
+
+              <div>{t.with_who}</div>
+
               <div style={{ fontSize: 12 }}>{t.note}</div>
+
               <div style={{ fontSize: 11, opacity: 0.6 }}>
-                {new Date(t.createdAt).toLocaleString()}
+                {new Date(t.updated_at).toLocaleString()}
               </div>
             </div>
 
-            <div>
-              <button onClick={() => startEdit(t)} style={{ marginRight: 8 }}>
-                ✏
-              </button>
-              <button onClick={() => handleDelete(t.id)}>
-                🗑
-              </button>
-            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+  <button onClick={() => startEdit(t)}>✏</button>
+  <button onClick={() => handleDelete(t.id)}>🗑</button>
+</div>
           </div>
         ))}
       </div>
 
       <div style={{ marginTop: 50, textAlign: "center" }}>
-        <button
-          onClick={handleDeleteProject}
-          style={{
-            padding: "8px 16px",
-            border: "1px solid #ddd",
-            borderRadius: 8,
-            background: "#fafafa",
-            color: "#555",
-            fontSize: 14,
-            cursor: "pointer",
-            transition: "all 0.15s ease"
-          }}
-        >
+        <button onClick={handleDeleteProject}>
           Delete Project
         </button>
       </div>
